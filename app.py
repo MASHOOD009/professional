@@ -1,15 +1,15 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 
 from cyber_attack_detection import (
     predict_attack,
-    accuracy
+    save_prediction,
+    get_prediction_history
 )
 
-# ==========================================
+# ==============================
 # PAGE CONFIGURATION
-# ==========================================
+# ==============================
 
 st.set_page_config(
     page_title="CyberGuard AI",
@@ -17,65 +17,57 @@ st.set_page_config(
     layout="wide"
 )
 
-# ==========================================
-# CUSTOM UI DESIGN
-# ==========================================
+# ==============================
+# CUSTOM CSS
+# ==============================
 
 st.markdown("""
 <style>
 
-.main-title {
-    font-size: 42px;
-    font-weight: bold;
-    text-align: center;
+.main {
+    background-color: #0e1117;
 }
 
-.subtitle {
-    text-align: center;
+.stButton > button {
+    width: 100%;
+    height: 50px;
     font-size: 18px;
-    margin-bottom: 30px;
+    font-weight: bold;
+    border-radius: 10px;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# TITLE
-# ==========================================
 
-st.markdown(
-    '<div class="main-title">🛡️ CyberGuard AI</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="subtitle">'
-    'Cyber Attack Detection and Network Monitoring System'
-    '</div>',
-    unsafe_allow_html=True
-)
-
-# ==========================================
+# ==============================
 # SIDEBAR
-# ==========================================
+# ==============================
 
 st.sidebar.title("🛡️ CyberGuard AI")
 
 page = st.sidebar.radio(
     "Navigation",
     [
-        "🔍 Attack Detection",
+        "🚨 Attack Detection",
         "📊 Dashboard",
         "📜 Prediction History",
         "ℹ️ About Project"
     ]
 )
 
-# ==========================================
-# ATTACK DETECTION PAGE
-# ==========================================
 
-if page == "🔍 Attack Detection":
+# ==============================
+# ATTACK DETECTION PAGE
+# ==============================
+
+if page == "🚨 Attack Detection":
+
+    st.title("🛡️ CyberGuard AI")
+
+    st.subheader("Cyber Attack Detection and Network Monitoring System")
+
+    st.divider()
 
     st.header("🔍 Network Activity Analysis")
 
@@ -87,21 +79,19 @@ if page == "🔍 Attack Detection":
     col1, col2 = st.columns(2)
 
     with col1:
-
         packet_size = st.number_input(
             "📦 Packet Size",
-            min_value=0,
-            value=500
+            min_value=0.0,
+            value=500.0
         )
 
         connection_duration = st.number_input(
             "⏱️ Connection Duration",
-            min_value=0,
-            value=100
+            min_value=0.0,
+            value=100.0
         )
 
     with col2:
-
         failed_login_attempts = st.number_input(
             "🔐 Failed Login Attempts",
             min_value=0,
@@ -116,146 +106,200 @@ if page == "🔍 Attack Detection":
 
     st.divider()
 
-    if st.button(
-        "🚀 Analyze Network Activity",
-        use_container_width=True
-    ):
+    if st.button("🚀 Analyze Network Activity"):
 
-        prediction = predict_attack(
+        with st.spinner("Analyzing network activity..."):
+
+            result = predict_attack(
+                packet_size,
+                connection_duration,
+                failed_login_attempts,
+                number_of_packets
+            )
+
+        prediction = result["prediction"]
+        attack_type = result["attack_type"]
+        confidence = result["confidence"]
+
+        # SAVE TO MYSQL
+        save_prediction(
             packet_size,
             connection_duration,
             failed_login_attempts,
-            number_of_packets
+            number_of_packets,
+            prediction,
+            attack_type,
+            confidence
         )
 
-        st.subheader("Analysis Result")
+        st.divider()
 
-        if prediction == 1:
+        st.header("📋 Analysis Result")
 
-            st.error("🚨 CYBER ATTACK DETECTED!")
+        col1, col2, col3 = st.columns(3)
 
-            st.warning(
-                "⚠️ The network activity contains suspicious patterns."
+        with col1:
+            st.metric(
+                "Prediction",
+                prediction
+            )
+
+        with col2:
+            st.metric(
+                "Attack Type",
+                attack_type
+            )
+
+        with col3:
+            st.metric(
+                "Confidence",
+                f"{confidence:.2f}%"
+            )
+
+        # ALERT MESSAGE
+        if prediction.lower() in ["attack", "malicious", "dos attack"]:
+
+            st.error(
+                f"⚠️ SECURITY ALERT: {attack_type} detected!"
             )
 
         else:
 
-            st.success("✅ NORMAL NETWORK TRAFFIC")
-
-            st.info(
-                "The network activity appears normal."
+            st.success(
+                "✅ Network activity appears to be safe."
             )
 
-        # Prediction information
 
-        prediction_data = {
-            "Date & Time": datetime.now().strftime(
-                "%Y-%m-%d %H:%M:%S"
-            ),
-            "Packet Size": packet_size,
-            "Connection Duration": connection_duration,
-            "Failed Login Attempts": failed_login_attempts,
-            "Number of Packets": number_of_packets,
-            "Result": (
-                "Cyber Attack"
-                if prediction == 1
-                else "Normal Traffic"
-            )
-        }
-
-        st.session_state["latest_prediction"] = prediction_data
-
-# ==========================================
+# ==============================
 # DASHBOARD PAGE
-# ==========================================
+# ==============================
 
 elif page == "📊 Dashboard":
 
-    st.header("📊 Security Dashboard")
+    st.title("📊 Cyber Security Dashboard")
 
-    col1, col2, col3 = st.columns(3)
+    try:
 
-    col1.metric(
-        "🤖 ML Model",
-        "Random Forest"
-    )
+        data = get_prediction_history()
 
-    col2.metric(
-        "🎯 Model Accuracy",
-        f"{accuracy * 100:.2f}%"
-    )
+        if data is not None and len(data) > 0:
 
-    col3.metric(
-        "🛡️ System Status",
-        "Active"
-    )
+            df = pd.DataFrame(data)
 
-    st.divider()
+            col1, col2, col3 = st.columns(3)
 
-    st.subheader("System Overview")
+            with col1:
+                st.metric(
+                    "Total Records",
+                    len(df)
+                )
 
-    st.info(
-        "This dashboard will display prediction statistics "
-        "and attack detection information."
-    )
+            with col2:
+                attacks = len(
+                    df[df["prediction"].str.lower() != "normal"]
+                )
 
-    if "latest_prediction" in st.session_state:
+                st.metric(
+                    "Total Attacks",
+                    attacks
+                )
 
-        st.subheader("Latest Prediction")
+            with col3:
+                normal = len(df) - attacks
 
-        latest = pd.DataFrame(
-            [st.session_state["latest_prediction"]]
+                st.metric(
+                    "Normal Traffic",
+                    normal
+                )
+
+            st.divider()
+
+            st.subheader("📈 Recent Network Activity")
+
+            st.dataframe(
+                df,
+                use_container_width=True
+            )
+
+        else:
+
+            st.info(
+                "No prediction data available yet."
+            )
+
+    except Exception as e:
+
+        st.warning(
+            "Unable to load dashboard data."
         )
 
-        st.dataframe(
-            latest,
-            use_container_width=True
-        )
 
-# ==========================================
-# PREDICTION HISTORY PAGE
-# ==========================================
+# ==============================
+# PREDICTION HISTORY
+# ==============================
 
 elif page == "📜 Prediction History":
 
-    st.header("📜 Prediction History")
+    st.title("📜 Prediction History")
 
-    st.write(
-        "All predictions will be stored and retrieved from MySQL."
-    )
+    try:
 
-    st.info(
-        "The MySQL database connection will be added next."
-    )
+        data = get_prediction_history()
 
-# ==========================================
-# ABOUT PAGE
-# ==========================================
+        if data is not None and len(data) > 0:
+
+            df = pd.DataFrame(data)
+
+            st.dataframe(
+                df,
+                use_container_width=True
+            )
+
+        else:
+
+            st.info(
+                "No prediction history found."
+            )
+
+    except Exception as e:
+
+        st.error(
+            f"Database error: {e}"
+        )
+
+
+# ==============================
+# ABOUT PROJECT
+# ==============================
 
 elif page == "ℹ️ About Project":
 
-    st.header("ℹ️ About CyberGuard AI")
+    st.title("ℹ️ About CyberGuard AI")
 
     st.write("""
-    **CyberGuard AI** is a Data Science and Machine Learning
-    project designed to analyze network traffic and detect
-    possible cyber attacks.
+    **CyberGuard AI** is a Cyber Attack Detection and Network
+    Monitoring System.
+
+    The system uses Machine Learning to analyze network activity
+    and identify potentially malicious traffic.
     """)
 
-    st.subheader("Technologies Used")
+    st.subheader("🛠️ Technologies Used")
 
     st.write("""
-    - 🐍 Python
-    - 📊 Pandas
-    - 🤖 Scikit-learn
-    - 🌲 Random Forest Classifier
-    - 🌐 Streamlit
-    - 🗄️ MySQL
+    - Python
+    - Streamlit
+    - Machine Learning
+    - Scikit-learn
+    - Pandas
+    - NumPy
+    - MySQL
     """)
 
-# ==========================================
+
+# ==============================
 # FOOTER
-# ==========================================
+# ==============================
 
 st.divider()
 
